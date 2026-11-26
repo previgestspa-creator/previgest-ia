@@ -78,7 +78,7 @@
       cont.appendChild(el('div', { class: 'item medida' + (m.estado === 'Cerrada' ? ' cerrada' : '') }, [
         el('div', { class: 'tit' }, [el('span', { text: m.medida }), el('span', { class: U.clasePrioridad(m.prioridad), text: U.textoPrioridad(m.prioridad) })]),
         el('div', { class: 'sub', text: 'Peligro: ' + m.peligro }),
-        el('div', { class: 'sub', text: m.empresa + ' · ' + m.centro + ' · Obs. N.º ' + m.numero }),
+        el('div', { class: 'sub', text: m.empresa + ' · ' + m.centro + (/^ACC-/.test(m.numero) ? ' · ' : ' · Obs. N.º ') + m.numero }),
         el('p', {}, [el('span', { class: 'estado-medida ' + m.estado.replace(' ', '-'), text: m.estado }), document.createTextNode(' '),
           el('span', { class: 'plazo ' + plazo.c, text: plazo.t })]),
         el('div', { class: 'sub', text: 'Responsable: ' + (m.responsable || 'sin asignar') + (m.correoResponsable ? ' (' + m.correoResponsable + ')' : '') }),
@@ -1282,6 +1282,7 @@
         el('div', { class: 'tit' }, [el('span', { text: u.nombre || u.usuario }), el('span', { class: 'tenue', text: u.rol === 'ADMIN' ? 'Administrador' : u.rol === 'SSO' ? 'SSO' : 'Observador' })]),
         el('div', { class: 'sub', text: 'Usuario: ' + u.usuario }),
         el('div', { class: 'sub', text: 'Empresas: ' + (u.empresas === '*' || u.rol === 'ADMIN' ? 'todas' : (u.empresas || '—')) }),
+        u.correo ? el('div', { class: 'sub', text: 'Correo: ' + u.correo }) : null,
         el('div', { class: 'sub', text: estado }),
         el('div', { class: 'fila-botones' }, [
           el('button', { class: 'btn btn-secundario', type: 'button', text: 'Editar / nueva contraseña', onclick: function () { abrirFormUsuario(u); } })
@@ -1298,6 +1299,8 @@
     $('usrUsuario').value = u ? u.usuario : '';
     $('usrUsuario').disabled = !!u;
     $('usrNombre').value = u ? u.nombre : '';
+    $('usrCorreo').value = u ? (u.correo || (/@/.test(u.usuario) ? u.usuario : '')) : '';
+    $('usrEnviarCorreo').checked = true;
     $('usrRol').value = u ? u.rol : 'OBSERVADOR';
     var lista = u && u.empresas && u.empresas !== '*' ? u.empresas.split(';').map(function (x) { return x.trim(); }).filter(Boolean) : [];
     $('usrTodas').checked = !!(u && (u.empresas === '*' || u.rol === 'ADMIN'));
@@ -1316,8 +1319,13 @@
       rol: $('usrRol').value,
       empresas: ($('usrTodas').checked || $('usrRol').value === 'ADMIN') ? '*' : empresasMarcadas().join('; '),
       activo: $('usrActivo').checked,
-      contrasena: $('usrContrasena').value
+      contrasena: $('usrContrasena').value,
+      correo: $('usrCorreo').value.trim(),
+      enviarCorreo: $('usrEnviarCorreo').checked && !!$('usrContrasena').value,
+      appUrl: location.origin + location.pathname.replace(/index\.html$/, '')
     };
+    // Sin correo no se envía: se muestran los datos para entregarlos en persona.
+    if (!d.correo && !/@/.test(d.usuario)) d.enviarCorreo = false;
     if (!d.empresas) { toast('Marque al menos una empresa o «Todas las empresas».', true); return; }
     if (!/^[a-z0-9._@\-]{3,60}$/.test(d.usuario) && !editandoUsuario) {
       toast('El usuario debe tener entre 3 y 60 caracteres: letras sin tilde, números, punto, guion o @. Sin espacios.', true); return;
@@ -1330,7 +1338,12 @@
       return Api.llamar('usuarioGuardar', d).then(function (r) {
         if (r.token) { var c = U.leerJSON(K_CONFIG, {}); c.token = r.token; U.guardarJSON(K_CONFIG, c); }
         $('formUsuario').hidden = true;
-        toast(conClave
+        if (r.correoEnviado) {
+          toast('Usuario guardado. Se enviaron el usuario y la contraseña por correo a ' + (d.correo || d.usuario) + '.');
+          return cargarUsuarios();
+        }
+        if (r.avisoCorreo) toast(r.avisoCorreo, true);
+        else toast(conClave
           ? 'Usuario guardado. Entregue a ' + d.nombre + ' el usuario «' + d.usuario + '» y la contraseña «' + d.contrasena + '».'
           : 'Usuario actualizado.');
         if (conClave) alert('Datos de acceso para ' + d.nombre + ':\n\nUsuario: ' + d.usuario + '\nContraseña: ' + d.contrasena + '\n\nCópielos ahora: la contraseña no se podrá volver a ver.');
@@ -1397,7 +1410,7 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.5.0') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.6.1') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();

@@ -169,6 +169,7 @@
       </div>
     </section>
 
+
     <!-- ============ INICIO DE SESIÓN ============ -->
     <section id="vista-login" class="vista" hidden>
       <div class="card login">
@@ -235,6 +236,8 @@
           <input id="usrUsuario" autocapitalize="none" spellcheck="false" maxlength="60" placeholder="ej.: juan.soto">
           <label for="usrNombre">Nombre completo</label>
           <input id="usrNombre" maxlength="80" placeholder="ej.: Juan Soto">
+          <label for="usrCorreo">Correo de la persona</label>
+          <input id="usrCorreo" type="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="ej.: juan.soto@empresa.cl">
           <label for="usrRol">Rol</label>
           <select id="usrRol">
             <option value="OBSERVADOR">Observador (registra observaciones)</option>
@@ -256,7 +259,11 @@
             <input id="usrContrasena" type="text" autocomplete="off" spellcheck="false" maxlength="100">
             <button id="btnGenerarContrasena" class="btn btn-borde" type="button">Generar</button>
           </div>
-          <p class="tenue" id="usrAyudaContrasena">Copie la contraseña y entréguela al trabajador. No se podrá volver a ver.</p>
+          <label class="check">
+            <input type="checkbox" id="usrEnviarCorreo" checked>
+            <span>Enviar usuario y contraseña por correo a la persona</span>
+          </label>
+          <p class="tenue" id="usrAyudaContrasena">La contraseña es temporal: al ingresar por primera vez se le pedirá crear la suya. No se podrá volver a ver.</p>
           <div class="fila-botones">
             <button id="usrCancelar" class="btn btn-borde" type="button">Cancelar</button>
             <button id="usrGuardar" class="btn btn-primario" type="button">Guardar usuario</button>

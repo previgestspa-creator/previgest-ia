@@ -5,5 +5,5 @@
  */
 window.PREVIGEST_CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbzBXN8Qry1rGheKf_1nLwt8K0mson0h0IkH-yTPFJCwwHnFtMAiR0NFrF3Xmx8jZbWhkA/exec',
-  VERSION: '1.5.0'
+  VERSION: '1.6.1'
 };
