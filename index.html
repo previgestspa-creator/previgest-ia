@@ -140,16 +140,48 @@
       </div>
     </section>
 
+    <!-- ============ INICIO DE SESIÓN ============ -->
+    <section id="vista-login" class="vista" hidden>
+      <div class="card login">
+        <h2>Iniciar sesión</h2>
+        <p class="tenue">Ingrese con el usuario y la contraseña que le entregó el administrador.</p>
+        <label for="loginUsuario">Usuario</label>
+        <input id="loginUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="60">
+        <label for="loginContrasena">Contraseña</label>
+        <input id="loginContrasena" type="password" autocomplete="current-password" maxlength="200">
+        <label class="check">
+          <input type="checkbox" id="loginVer">
+          <span>Mostrar contraseña</span>
+        </label>
+        <button id="btnLogin" class="btn btn-primario btn-bloque" type="button">Ingresar</button>
+        <details id="loginAvanzado">
+          <summary>Dirección del servidor</summary>
+          <input id="loginUrl" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+        </details>
+      </div>
+      <p class="tenue centro">¿Olvidó su contraseña? Pida al administrador que le asigne una nueva.</p>
+    </section>
+
     <!-- ============ CONFIGURACIÓN ============ -->
     <section id="vista-config" class="vista" hidden>
       <div class="card">
-        <h2>Usuario</h2>
-        <label for="cfgObservador">Nombre del observador</label>
+        <h2>Mi cuenta</h2>
+        <p id="cfgCuenta" class="tenue"></p>
+        <label for="cfgObservador">Nombre que aparece en los informes</label>
         <input id="cfgObservador" maxlength="80" autocomplete="name">
-        <label for="cfgClave">Clave de acceso personal</label>
-        <input id="cfgClave" type="password" autocomplete="off" spellcheck="false" placeholder="PGI-…">
-        <label for="cfgUrl">Dirección del servidor</label>
-        <input id="cfgUrl" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+        <div class="fila-botones">
+          <button id="btnCambiarContrasena" class="btn btn-secundario" type="button">Cambiar contraseña</button>
+          <button id="btnCerrarSesion" class="btn btn-borde" type="button">Cerrar sesión</button>
+        </div>
+        <div id="formContrasena" hidden>
+          <label for="cfgActual">Contraseña actual</label>
+          <input id="cfgActual" type="password" autocomplete="current-password" maxlength="200">
+          <label for="cfgNueva">Nueva contraseña (mínimo 8 caracteres)</label>
+          <input id="cfgNueva" type="password" autocomplete="new-password" maxlength="100">
+          <label for="cfgNueva2">Repita la nueva contraseña</label>
+          <input id="cfgNueva2" type="password" autocomplete="new-password" maxlength="100">
+          <button id="btnConfirmarContrasena" class="btn btn-primario btn-bloque" type="button">Guardar nueva contraseña</button>
+        </div>
       </div>
       <div class="card">
         <h2>Informes</h2>
@@ -162,6 +194,49 @@
       </div>
       <button id="btnGuardarConfig" class="btn btn-primario btn-bloque" type="button">Guardar y verificar conexión</button>
       <div id="estadoServidor" class="card tenue" hidden></div>
+
+      <!-- Solo administradores -->
+      <div id="cardUsuarios" class="card" hidden>
+        <h2>Usuarios</h2>
+        <p class="tenue">Cree las cuentas de los trabajadores y entrégueles su usuario y contraseña.</p>
+        <button id="btnNuevoUsuario" class="btn btn-secundario btn-bloque" type="button">+ Nuevo usuario</button>
+        <div id="formUsuario" class="item" hidden>
+          <h3 id="formUsuarioTitulo">Nuevo usuario</h3>
+          <label for="usrUsuario">Usuario (para ingresar)</label>
+          <input id="usrUsuario" autocapitalize="none" spellcheck="false" maxlength="60" placeholder="ej.: juan.soto">
+          <label for="usrNombre">Nombre completo</label>
+          <input id="usrNombre" maxlength="80" placeholder="ej.: Juan Soto">
+          <label for="usrRol">Rol</label>
+          <select id="usrRol">
+            <option value="OBSERVADOR">Observador (registra observaciones)</option>
+            <option value="ADMIN">Administrador (ve todo y gestiona usuarios)</option>
+          </select>
+          <label for="usrEmpresas">Empresas que puede ver</label>
+          <input id="usrEmpresas" maxlength="1000" placeholder="* para todas, o: Empresa A; Empresa B">
+          <label class="check">
+            <input type="checkbox" id="usrActivo" checked>
+            <span>Cuenta activa</span>
+          </label>
+          <label for="usrContrasena" id="usrContrasenaEtiqueta">Contraseña</label>
+          <div class="fila-input">
+            <input id="usrContrasena" type="text" autocomplete="off" spellcheck="false" maxlength="100">
+            <button id="btnGenerarContrasena" class="btn btn-borde" type="button">Generar</button>
+          </div>
+          <p class="tenue" id="usrAyudaContrasena">Copie la contraseña y entréguela al trabajador. No se podrá volver a ver.</p>
+          <div class="fila-botones">
+            <button id="usrCancelar" class="btn btn-borde" type="button">Cancelar</button>
+            <button id="usrGuardar" class="btn btn-primario" type="button">Guardar usuario</button>
+          </div>
+        </div>
+        <div id="listaUsuarios"></div>
+      </div>
+
+      <details class="card">
+        <summary>Avanzado</summary>
+        <label for="cfgUrl">Dirección del servidor</label>
+        <input id="cfgUrl" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+      </details>
+
       <div class="card">
         <h2>Privacidad</h2>
         <p class="tenue">Las fotografías se comprimen y se les eliminan los metadatos (ubicación, dispositivo) antes de salir del teléfono. No se envían a la IA el nombre de la empresa, del centro ni del observador.</p>
@@ -198,6 +273,19 @@
   </div>
 
   <!-- Diálogo de correo -->
+  <!-- PDF listo (iPhone: menú Compartir de iOS) -->
+  <div id="dlgPdf" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="PDF listo">
+    <div class="card">
+      <h2>PDF listo</h2>
+      <p class="tenue" id="dlgPdfNombre"></p>
+      <p class="tenue">Use «Guardar o compartir» para guardarlo en Archivos o enviarlo por WhatsApp o correo.</p>
+      <div class="fila-botones">
+        <button id="dlgPdfCerrar" class="btn btn-borde" type="button">Cerrar</button>
+        <button id="dlgPdfCompartir" class="btn btn-primario" type="button">Guardar o compartir</button>
+      </div>
+    </div>
+  </div>
+
   <div id="dlgCorreo" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="Enviar por correo">
     <div class="card">
       <h2>Enviar por correo</h2>

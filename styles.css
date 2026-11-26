@@ -38,7 +38,7 @@ body {
   padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
   border-bottom: 4px solid var(--calipso);
 }
-.logo { height: 32px; width: auto; max-width: 140px; }
+.logo { height: 40px; width: auto; max-width: 160px; }
 .app-title { font-size: 13px; line-height: 1.15; opacity: .9; flex: 1; }
 .red { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: var(--calipso-osc); white-space: nowrap; }
 .red.sin { background: #7a5b00; }
@@ -179,3 +179,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 
 .toast { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 12px); z-index: 70; max-width: 560px; margin: 0 auto; background: var(--azul); color: var(--blanco); padding: 12px 14px; border-radius: 10px; font-size: 15px; }
 .toast.error { background: var(--peligro); }
+
+/* ---------- Inicio de sesión y usuarios (v1.1) ---------- */
+.sin-sesion .tabbar { display: none; }
+.sin-sesion main { padding-bottom: 24px; }
+.login { margin-top: 24px; }
+details.card summary, details summary { cursor: pointer; font-weight: 700; color: var(--azul); padding: 4px 0; }
+details[open] summary { margin-bottom: 8px; }
+#loginAvanzado { margin-top: 8px; font-size: 14px; }
+.fila-input { display: flex; gap: 8px; align-items: center; }
+.fila-input input { flex: 1 1 auto; min-width: 0; }
+.fila-input .btn { flex: 0 0 auto; }
+.usuario-inactivo { opacity: .6; }

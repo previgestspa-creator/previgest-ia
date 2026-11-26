@@ -1,7 +1,7 @@
 /*
  * Cliente del backend (Google Apps Script).
  * Usa POST con Content-Type text/plain para evitar la verificación previa CORS.
- * La clave personal viaja en el cuerpo (HTTPS), nunca en la URL.
+ * El token de sesión viaja en el cuerpo (HTTPS), nunca en la URL.
  */
 (function () {
   'use strict';
@@ -19,7 +19,8 @@
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) {
       return Promise.reject(ErrorApi('SIN_SERVIDOR', 'La dirección del servidor debe ser una implementación de Google Apps Script (https://script.google.com/…).'));
     }
-    if (!cfg.clave) return Promise.reject(ErrorApi('NO_AUTORIZADO', 'Ingrese su clave de acceso en Configuración.'));
+    var esLogin = accion === 'login';
+    if (!esLogin && !cfg.token) return Promise.reject(ErrorApi('SESION_EXPIRADA', 'Inicie sesión para continuar.'));
     if (!navigator.onLine) return Promise.reject(ErrorApi('SIN_CONEXION', 'Sin conexión a Internet.'));
 
     var ctrl = new AbortController();
@@ -28,7 +29,7 @@
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ accion: accion, clave: cfg.clave, datos: datos || {} }),
+      body: JSON.stringify(esLogin ? { accion: accion, datos: datos || {} } : { accion: accion, token: cfg.token, datos: datos || {} }),
       redirect: 'follow',
       cache: 'no-store',
       credentials: 'omit',
@@ -42,14 +43,20 @@
       if (err && err.name === 'AbortError') throw ErrorApi('TIEMPO_AGOTADO', 'El servidor tardó demasiado en responder.');
       throw ErrorApi('ERROR_RED', 'No fue posible conectar con el servidor.');
     }).then(function (j) {
-      if (!j || j.ok !== true) throw ErrorApi((j && j.codigo) || 'ERROR', (j && j.mensaje) || 'Error desconocido.');
+      if (!j || j.ok !== true) {
+        var err = ErrorApi((j && j.codigo) || 'ERROR', (j && j.mensaje) || 'Error desconocido.');
+        if (!esLogin && (err.codigo === 'SESION_EXPIRADA' || err.codigo === 'NO_AUTORIZADO') && window.App && App.sesionInvalida) {
+          App.sesionInvalida(err.message);
+        }
+        throw err;
+      }
       return j.datos;
     }).finally(function () { clearTimeout(timer); });
   }
 
   /** Errores que no deben borrar ni alterar la observación pendiente. */
   function esTransitorio(e) {
-    return ['SIN_CONEXION', 'ERROR_RED', 'TIEMPO_AGOTADO', 'CUOTA_IA_AGOTADA', 'IA_NO_DISPONIBLE', 'OCUPADO', 'IA_NO_AUTORIZADA'].indexOf(e && e.codigo) >= 0;
+    return ['SIN_CONEXION', 'ERROR_RED', 'TIEMPO_AGOTADO', 'CUOTA_IA_AGOTADA', 'IA_NO_DISPONIBLE', 'OCUPADO', 'IA_NO_AUTORIZADA', 'SESION_EXPIRADA', 'NO_AUTORIZADO'].indexOf(e && e.codigo) >= 0;
   }
 
   window.Api = { llamar: llamar, esTransitorio: esTransitorio };

@@ -17,7 +17,8 @@
     var c = U.leerJSON(K_CONFIG, {});
     return {
       apiUrl: c.apiUrl || (window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.API_URL) || '',
-      clave: c.clave || '',
+      token: c.token || '',
+      usuario: c.usuario || '',
       observador: c.observador || '',
       destinatario: c.destinatario || '',
       autoEnvio: !!c.autoEnvio
@@ -55,7 +56,9 @@
   /* ================= Navegación ================= */
 
   function irA(vista) {
-    ['inicio', 'historial', 'config'].forEach(function (v) {
+    var sinSesion = vista === 'login';
+    document.body.classList.toggle('sin-sesion', sinSesion);
+    ['inicio', 'historial', 'config', 'login'].forEach(function (v) {
       $('vista-' + v).hidden = v !== vista;
     });
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
@@ -63,6 +66,7 @@
     });
     if (vista === 'historial') { renderPendientes(); llenarFiltroEmpresas(); }
     if (vista === 'config') cargarFormConfig();
+    if (vista === 'login') prepararLogin();
     window.scrollTo(0, 0);
   }
 
@@ -484,7 +488,7 @@
       return confirmarEdicion().then(function () { return U.blobABase64(actual.foto); }).then(function (b64) {
         return Api.llamar('pdf', { informe: informePayload(actual), foto: b64 }, { timeout: 90000 });
       }).then(function (r) {
-        U.descargar(U.base64ABlob(r.pdf, 'application/pdf'), r.nombre);
+        entregarPdf(U.base64ABlob(r.pdf, 'application/pdf'), r.nombre);
         toast('PDF descargado.');
       });
     });
@@ -619,7 +623,7 @@
           onclick: function () {
             conBloqueo('Descargando PDF…', function () {
               return Api.llamar('descargar', { empresa: o.empresa, id: o.id }).then(function (d) {
-                U.descargar(U.base64ABlob(d.pdf, 'application/pdf'), d.nombre);
+                entregarPdf(U.base64ABlob(d.pdf, 'application/pdf'), d.nombre);
               });
             });
           }
@@ -652,8 +656,13 @@
   function cargarFormConfig() {
     var c = config();
     $('cfgObservador').value = c.observador;
-    $('cfgClave').value = c.clave;
     $('cfgUrl').value = c.apiUrl;
+    var s0 = sesion();
+    $('cfgCuenta').textContent = s0 && s0.usuario
+      ? 'Sesión iniciada como ' + s0.usuario.nombre + ' (usuario: ' + s0.usuario.usuario + ', ' + (s0.usuario.rol === 'ADMIN' ? 'administrador' : 'observador') + ').'
+      : (c.usuario ? 'Sesión iniciada como ' + c.usuario + '.' : '');
+    $('cardUsuarios').hidden = !(s0 && s0.usuario && s0.usuario.rol === 'ADMIN');
+    if (!$('cardUsuarios').hidden && navigator.onLine) cargarUsuarios();
     $('cfgCorreo').value = c.destinatario;
     $('cfgAutoEnvio').checked = c.autoEnvio;
     var s = sesion();
@@ -688,13 +697,11 @@
   }
 
   function alGuardarConfig() {
-    var c = {
-      observador: $('cfgObservador').value.trim(),
-      clave: $('cfgClave').value.trim(),
-      apiUrl: $('cfgUrl').value.trim(),
-      destinatario: $('cfgCorreo').value.trim(),
-      autoEnvio: $('cfgAutoEnvio').checked
-    };
+    var c = U.leerJSON(K_CONFIG, {});
+    c.observador = $('cfgObservador').value.trim();
+    c.apiUrl = $('cfgUrl').value.trim();
+    c.destinatario = $('cfgCorreo').value.trim();
+    c.autoEnvio = $('cfgAutoEnvio').checked;
     if (c.destinatario && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c.destinatario)) { toast('El correo destinatario no es válido.', true); return; }
     U.guardarJSON(K_CONFIG, c);
     if (actual && actual.estado === 'borrador') { actual.obs.observador = c.observador; renderMeta(); }
@@ -708,10 +715,224 @@
   }
 
   function alBorrarLocal() {
-    if (!confirm('Se eliminarán las observaciones pendientes, la configuración y la clave guardadas en este dispositivo. ¿Continuar?')) return;
+    if (!confirm('Se eliminarán las observaciones pendientes, la configuración y la sesión guardadas en este dispositivo. ¿Continuar?')) return;
     DB.vaciar().then(function () {
       try { localStorage.clear(); } catch (e) {}
       location.reload();
+    });
+  }
+
+  /* ================= Entrega de PDF ================= */
+
+  var pdfPendiente = null;
+
+  function esIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  /**
+   * En iPhone/iPad, abrir un PDF temporal deja una pestaña que Safari no puede reabrir
+   * después ("WebKitBlobResource"). Allí se usa el menú Compartir de iOS (Guardar en Archivos,
+   * WhatsApp, Correo). En los demás equipos se descarga como archivo.
+   */
+  function entregarPdf(blob, nombre) {
+    var archivo = null;
+    try { archivo = new File([blob], nombre, { type: 'application/pdf' }); } catch (e) {}
+    if (esIOS() && archivo && navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      pdfPendiente = archivo;
+      $('dlgPdfNombre').textContent = nombre;
+      $('dlgPdf').hidden = false;
+      return;
+    }
+    U.descargar(blob, nombre);
+  }
+
+  function alCompartirPdf() {
+    if (!pdfPendiente) { $('dlgPdf').hidden = true; return; }
+    var f = pdfPendiente;
+    navigator.share({ files: [f], title: f.name }).then(function () {
+      $('dlgPdf').hidden = true;
+      pdfPendiente = null;
+    }, function (e) {
+      if (e && e.name === 'AbortError') return; // el usuario cerró el menú; puede intentar de nuevo
+      $('dlgPdf').hidden = true;
+      pdfPendiente = null;
+      U.descargar(f, f.name);
+    });
+  }
+
+  /* ================= Sesión ================= */
+
+  function prepararLogin() {
+    var c = config();
+    var preset = !!(window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.API_URL);
+    $('loginAvanzado').hidden = preset && !U.leerJSON(K_CONFIG, {}).apiUrl;
+    $('loginUrl').value = c.apiUrl;
+    if (!$('loginUsuario').value && c.usuario) $('loginUsuario').value = c.usuario;
+    if (!preset && !c.apiUrl) $('loginAvanzado').open = true;
+  }
+
+  function mostrarLogin(mensaje) {
+    irA('login');
+    if (mensaje) toast(mensaje, true);
+  }
+
+  function sesionInvalida(mensaje) {
+    var c = U.leerJSON(K_CONFIG, {});
+    if (!c.token) return;
+    delete c.token;
+    U.guardarJSON(K_CONFIG, c);
+    try { localStorage.removeItem(K_SESION); } catch (e) {}
+    setTimeout(function () { mostrarLogin(mensaje || 'Su sesión expiró. Ingrese nuevamente.'); }, 0);
+  }
+
+  function alLogin() {
+    var usuario = $('loginUsuario').value.trim();
+    var contrasena = $('loginContrasena').value;
+    if (!usuario || !contrasena) { toast('Ingrese su usuario y contraseña.', true); return; }
+    var url = $('loginUrl').value.trim();
+    var c = U.leerJSON(K_CONFIG, {});
+    if (url && url !== (window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.API_URL)) c.apiUrl = url;
+    else delete c.apiUrl;
+    U.guardarJSON(K_CONFIG, c);
+    if (!navigator.onLine) { toast('Se necesita conexión a Internet para iniciar sesión.', true); return; }
+    conBloqueo('Ingresando…', function () {
+      return Api.llamar('login', { usuario: usuario, contrasena: contrasena }, { timeout: 30000 }).then(function (r) {
+        var c2 = U.leerJSON(K_CONFIG, {});
+        var cambioUsuario = c2.usuario && c2.usuario !== r.usuario.usuario;
+        c2.token = r.token;
+        c2.usuario = r.usuario.usuario;
+        delete c2.clave;
+        if (!c2.observador || cambioUsuario) c2.observador = r.usuario.nombre;
+        U.guardarJSON(K_CONFIG, c2);
+        $('loginContrasena').value = '';
+        if (actual && actual.estado === 'borrador') { actual.obs.observador = c2.observador; renderMeta(); }
+        return cargarSesion(true).then(function () {
+          if (r.debeCambiar) {
+            irA('config');
+            $('formContrasena').hidden = false;
+            $('cfgActual').value = contrasena;
+            toast('Bienvenido/a, ' + r.usuario.nombre + '. Cree ahora su contraseña personal.');
+          } else {
+            irA('inicio');
+            toast('Bienvenido/a, ' + r.usuario.nombre + '.');
+          }
+          actualizarAviso();
+        });
+      });
+    });
+  }
+
+  function alCerrarSesion() {
+    if (!confirm('¿Cerrar sesión en este dispositivo? Las observaciones pendientes se conservan.')) return;
+    var c = U.leerJSON(K_CONFIG, {});
+    delete c.token;
+    U.guardarJSON(K_CONFIG, c);
+    try { localStorage.removeItem(K_SESION); } catch (e) {}
+    mostrarLogin();
+  }
+
+  function alCambiarContrasena() {
+    var actualC = $('cfgActual').value, n1 = $('cfgNueva').value, n2 = $('cfgNueva2').value;
+    if (!actualC || !n1) { toast('Complete la contraseña actual y la nueva.', true); return; }
+    if (n1.length < 8) { toast('La nueva contraseña debe tener al menos 8 caracteres.', true); return; }
+    if (n1 !== n2) { toast('Las contraseñas nuevas no coinciden.', true); return; }
+    conBloqueo('Guardando contraseña…', function () {
+      return Api.llamar('cambiarContrasena', { actual: actualC, nueva: n1 }).then(function (r) {
+        var c = U.leerJSON(K_CONFIG, {});
+        c.token = r.token;
+        U.guardarJSON(K_CONFIG, c);
+        ['cfgActual', 'cfgNueva', 'cfgNueva2'].forEach(function (id) { $(id).value = ''; });
+        $('formContrasena').hidden = true;
+        toast('Contraseña actualizada.');
+        return cargarSesion(true);
+      });
+    });
+  }
+
+  /* ================= Usuarios (administrador) ================= */
+
+  var usuariosCache = [];
+  var editandoUsuario = null;
+
+  function generarContrasena() {
+    var abc = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var b = crypto.getRandomValues(new Uint8Array(10));
+    var s = Array.prototype.map.call(b, function (x) { return abc[x % abc.length]; }).join('');
+    return s.slice(0, 5) + '-' + s.slice(5) + (2 + (b[0] % 8));
+  }
+
+  function cargarUsuarios() {
+    return Api.llamar('usuarios', {}, { timeout: 30000 }).then(function (r) {
+      usuariosCache = r.usuarios || [];
+      renderUsuarios();
+    }, function (e) {
+      $('listaUsuarios').textContent = '';
+      $('listaUsuarios').appendChild(el('p', { class: 'tenue', text: 'No se pudo cargar la lista de usuarios: ' + e.message }));
+    });
+  }
+
+  function renderUsuarios() {
+    var cont = $('listaUsuarios');
+    cont.textContent = '';
+    usuariosCache.forEach(function (u) {
+      var estado = !u.activo ? 'Inactivo' : (u.tieneContrasena ? 'Activo' : (u.tieneClave ? 'Activo · sin contraseña (usa clave PGI-)' : 'Activo · sin contraseña'));
+      cont.appendChild(el('div', { class: 'item' + (u.activo ? '' : ' usuario-inactivo') }, [
+        el('div', { class: 'tit' }, [el('span', { text: u.nombre || u.usuario }), el('span', { class: 'tenue', text: u.rol === 'ADMIN' ? 'Administrador' : 'Observador' })]),
+        el('div', { class: 'sub', text: 'Usuario: ' + u.usuario }),
+        el('div', { class: 'sub', text: 'Empresas: ' + (u.empresas === '*' || u.rol === 'ADMIN' ? 'todas' : (u.empresas || '—')) }),
+        el('div', { class: 'sub', text: estado }),
+        el('div', { class: 'fila-botones' }, [
+          el('button', { class: 'btn btn-secundario', type: 'button', text: 'Editar / nueva contraseña', onclick: function () { abrirFormUsuario(u); } })
+        ])
+      ]));
+    });
+    if (!usuariosCache.length) cont.appendChild(el('p', { class: 'tenue', text: 'Aún no hay usuarios.' }));
+  }
+
+  function abrirFormUsuario(u) {
+    editandoUsuario = u || null;
+    $('formUsuario').hidden = false;
+    $('formUsuarioTitulo').textContent = u ? 'Editar usuario' : 'Nuevo usuario';
+    $('usrUsuario').value = u ? u.usuario : '';
+    $('usrUsuario').disabled = !!u;
+    $('usrNombre').value = u ? u.nombre : '';
+    $('usrRol').value = u ? u.rol : 'OBSERVADOR';
+    $('usrEmpresas').value = u ? u.empresas : '';
+    $('usrActivo').checked = u ? u.activo : true;
+    $('usrContrasena').value = u ? '' : generarContrasena();
+    $('usrContrasenaEtiqueta').textContent = u ? 'Nueva contraseña (deje vacío para no cambiarla)' : 'Contraseña';
+    $('usrContrasena').placeholder = u ? 'Sin cambios' : '';
+    $('formUsuario').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function alGuardarUsuario() {
+    var d = {
+      usuario: $('usrUsuario').value.trim().toLowerCase(),
+      nombre: $('usrNombre').value.trim(),
+      rol: $('usrRol').value,
+      empresas: $('usrEmpresas').value.trim(),
+      activo: $('usrActivo').checked,
+      contrasena: $('usrContrasena').value
+    };
+    if (d.rol === 'ADMIN' && !d.empresas) d.empresas = '*';
+    if (!/^[a-z0-9._@\-]{3,60}$/.test(d.usuario) && !editandoUsuario) {
+      toast('El usuario debe tener entre 3 y 60 caracteres: letras sin tilde, números, punto, guion o @. Sin espacios.', true); return;
+    }
+    if (!d.nombre) { toast('Ingrese el nombre completo.', true); return; }
+    if (!editandoUsuario && d.contrasena.length < 8) { toast('La contraseña debe tener al menos 8 caracteres.', true); return; }
+    if (d.contrasena && d.contrasena.length < 8) { toast('La contraseña debe tener al menos 8 caracteres.', true); return; }
+    var conClave = !!d.contrasena;
+    conBloqueo('Guardando usuario…', function () {
+      return Api.llamar('usuarioGuardar', d).then(function (r) {
+        if (r.token) { var c = U.leerJSON(K_CONFIG, {}); c.token = r.token; U.guardarJSON(K_CONFIG, c); }
+        $('formUsuario').hidden = true;
+        toast(conClave
+          ? 'Usuario guardado. Entregue a ' + d.nombre + ' el usuario «' + d.usuario + '» y la contraseña «' + d.contrasena + '».'
+          : 'Usuario actualizado.');
+        if (conClave) alert('Datos de acceso para ' + d.nombre + ':\n\nUsuario: ' + d.usuario + '\nContraseña: ' + d.contrasena + '\n\nCópielos ahora: la contraseña no se podrá volver a ver.');
+        return cargarUsuarios();
+      });
     });
   }
 
@@ -746,6 +967,19 @@
     $('btnBuscar').addEventListener('click', buscar);
     $('btnProcesarPendientes').addEventListener('click', procesarPendientes);
     $('btnGuardarConfig').addEventListener('click', alGuardarConfig);
+    $('btnLogin').addEventListener('click', alLogin);
+    $('dlgPdfCompartir').addEventListener('click', alCompartirPdf);
+    $('dlgPdfCerrar').addEventListener('click', function () { $('dlgPdf').hidden = true; pdfPendiente = null; });
+    $('loginContrasena').addEventListener('keydown', function (e) { if (e.key === 'Enter') alLogin(); });
+    $('loginVer').addEventListener('change', function () { $('loginContrasena').type = $('loginVer').checked ? 'text' : 'password'; });
+    $('btnCerrarSesion').addEventListener('click', alCerrarSesion);
+    $('btnCambiarContrasena').addEventListener('click', function () { $('formContrasena').hidden = !$('formContrasena').hidden; });
+    $('btnConfirmarContrasena').addEventListener('click', alCambiarContrasena);
+    $('btnNuevoUsuario').addEventListener('click', function () { abrirFormUsuario(null); });
+    $('btnGenerarContrasena').addEventListener('click', function () { $('usrContrasena').value = generarContrasena(); });
+    $('usrCancelar').addEventListener('click', function () { $('formUsuario').hidden = true; });
+    $('usrGuardar').addEventListener('click', alGuardarUsuario);
+    $('usrRol').addEventListener('change', function () { if ($('usrRol').value === 'ADMIN' && !$('usrEmpresas').value) $('usrEmpresas').value = '*'; });
     $('btnBorrarLocal').addEventListener('click', alBorrarLocal);
     window.addEventListener('online', function () { actualizarRed(); cargarSesion(true); });
     window.addEventListener('offline', actualizarRed);
@@ -754,15 +988,14 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.0.0') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.1.1') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();
     actualizarRed();
     var c = config();
-    if (!c.clave || !c.apiUrl) {
-      irA('config');
-      toast('Configure la dirección del servidor y su clave de acceso para comenzar.');
+    if (!c.token) {
+      mostrarLogin();
     } else if (navigator.onLine) {
       cargarSesion(true);
     }
@@ -770,6 +1003,6 @@
     if ('serviceWorker' in navigator && seguro) navigator.serviceWorker.register('sw.js').catch(function () {});
   }
 
-  window.App = { config: config };
+  window.App = { config: config, sesionInvalida: sesionInvalida };
   document.addEventListener('DOMContentLoaded', iniciar);
 })();
