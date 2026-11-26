@@ -894,11 +894,21 @@
     cont.textContent = '';
     empresasAdmin.forEach(function (e) {
       cont.appendChild(el('div', { class: 'empresa-fila' + (e.activa ? '' : ' usuario-inactivo') }, [
-        el('span', { text: e.empresa + (e.activa ? '' : ' (desactivada)') }),
-        el('button', {
-          class: 'btn btn-borde', type: 'button', text: e.activa ? 'Desactivar' : 'Activar',
-          onclick: function () { guardarEmpresa(e.empresa, !e.activa); }
-        })
+        el('span', { class: 'empresa-nombre', text: e.empresa + (e.activa ? '' : ' (desactivada)') }),
+        el('div', { class: 'empresa-acciones' }, [
+          el('button', {
+            class: 'btn btn-borde', type: 'button', text: 'Modificar',
+            onclick: function () { renombrarEmpresa(e.empresa); }
+          }),
+          el('button', {
+            class: 'btn btn-borde', type: 'button', text: e.activa ? 'Desactivar' : 'Activar',
+            onclick: function () { guardarEmpresa(e.empresa, !e.activa); }
+          }),
+          el('button', {
+            class: 'btn btn-borde btn-eliminar', type: 'button', text: 'Eliminar',
+            onclick: function () { eliminarEmpresa(e.empresa); }
+          })
+        ])
       ]));
     });
     if (!empresasAdmin.length) cont.appendChild(el('p', { class: 'tenue', text: 'Aún no hay empresas. Agregue la primera.' }));
@@ -911,6 +921,36 @@
         $('nuevaEmpresa').value = '';
         toast(r.nueva ? 'Empresa «' + r.empresa + '» agregada.' : (activa ? 'Empresa activada.' : 'Empresa desactivada.'));
         return Promise.all([cargarEmpresasAdmin(), cargarSesion(true)]);
+      });
+    });
+  }
+
+  function refrescarTrasEmpresa() {
+    var tareas = [cargarEmpresasAdmin(), cargarSesion(true)];
+    if (typeof cargarUsuarios === 'function') tareas.push(cargarUsuarios());
+    return Promise.all(tareas);
+  }
+
+  function renombrarEmpresa(nombre) {
+    var nuevo = prompt('Nuevo nombre para «' + nombre + '»:', nombre);
+    if (nuevo === null) return;
+    nuevo = nuevo.replace(/\s+/g, ' ').trim();
+    if (nuevo.length < 2) { toast('Escriba el nuevo nombre de la empresa.', true); return; }
+    if (nuevo === nombre) return;
+    conBloqueo('Modificando empresa…', function () {
+      return Api.llamar('empresaRenombrar', { empresa: nombre, nuevo: nuevo }, { timeout: 60000 }).then(function (r) {
+        toast('Empresa renombrada a «' + r.empresa + '».');
+        return refrescarTrasEmpresa();
+      });
+    });
+  }
+
+  function eliminarEmpresa(nombre) {
+    if (!confirm('¿Eliminar «' + nombre + '»?\n\nSolo se puede eliminar una empresa sin observaciones registradas. También se quitará de las cuentas de los usuarios que la tengan asignada.')) return;
+    conBloqueo('Eliminando empresa…', function () {
+      return Api.llamar('empresaEliminar', { empresa: nombre }, { timeout: 60000 }).then(function (r) {
+        toast('Empresa «' + r.empresa + '» eliminada.');
+        return refrescarTrasEmpresa();
       });
     });
   }
@@ -1078,7 +1118,7 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.2.0') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.3.0') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();

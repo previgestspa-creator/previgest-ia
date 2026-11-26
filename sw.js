@@ -3,7 +3,7 @@
  * Nunca almacena respuestas del servidor (datos de observaciones).
  * Al publicar una nueva versión, cambie CACHE para forzar la actualización.
  */
-var CACHE = 'previgest-ia-v1.2.0';
+var CACHE = 'previgest-ia-v1.3.0';
 var ARCHIVOS = [
   './', 'index.html', 'styles.css', 'config.js', 'manifest.webmanifest',
   'util.js', 'db.js', 'imagen.js', 'api.js', 'informe.js', 'app.js',
