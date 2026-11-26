@@ -142,12 +142,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .sin-sync { display: inline-block; font-size: 12px; background: #fff4d6; color: #7a5b00; border-radius: 6px; padding: 2px 6px; }
 .filtros { display: grid; gap: 8px; }
 .filtros label { margin: 0; font-weight: 400; color: var(--tenue); font-size: 13px; }
-.dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dos-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.dos-col label { min-width: 0; }
+input[type="date"] { min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; -webkit-appearance: none; appearance: none; }
 
 /* Navegación inferior */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--blanco); border-top: 1px solid var(--borde);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -201,3 +203,22 @@ details[open] summary { margin-bottom: 8px; }
 .empresa-fila .btn-eliminar { color: #b00020; }
 .empresa-fila:last-child { border-bottom: 0; }
 .empresa-fila .btn { min-height: 36px; font-size: 13px; padding: 4px 10px; }
+
+/* Medidas */
+.chips { display: flex; gap: 6px; margin: 8px 0; }
+.chip { flex: 1; border: 1px solid var(--borde); background: var(--blanco); color: var(--azul); border-radius: 99px; padding: 8px 4px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip b { display: inline-block; min-width: 18px; }
+.chip.activa { background: var(--azul); color: var(--blanco); border-color: var(--azul); }
+.chip-alerta b { color: var(--peligro); }
+.chip-alerta.activa { background: var(--peligro); border-color: var(--peligro); }
+.chip-alerta.activa b { color: var(--blanco); }
+.medida .plazo { font-size: 13px; font-weight: 600; }
+.medida .plazo.vencida { color: var(--peligro); }
+.medida .plazo.pronto { color: #b45309; }
+.medida.cerrada { background: #f3faf6; }
+.estado-medida { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: #eef2f6; color: var(--azul); white-space: nowrap; }
+.estado-medida.Cerrada { background: #dcf3e5; color: #0f7b3f; }
+.estado-medida.En-proceso { background: #e6f6f7; color: #00747a; }
+.foto-cierre { display: block; width: 100%; max-height: 50vh; object-fit: contain; border-radius: 8px; margin: 8px 0; background: #eef2f6; }
+.modal-centro .card { max-height: calc(100vh - 32px); overflow-y: auto; }
+.empresa-correos { font-size: 12px; color: var(--tenue); word-break: break-word; }

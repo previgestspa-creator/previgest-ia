@@ -119,6 +119,19 @@
         <div id="listaPendientes"></div>
         <button id="btnProcesarPendientes" class="btn btn-secundario btn-bloque" type="button" hidden>Analizar pendientes ahora</button>
       </div>
+      <div id="cardInformeGestion" class="card" hidden>
+        <h2>Informe de gestión</h2>
+        <p class="tenue">Genere un PDF con las observaciones y medidas de una empresa, filtrando por centro y fechas.</p>
+        <div class="filtros">
+          <select id="riEmpresa" aria-label="Empresa"></select>
+          <select id="riCentro" aria-label="Centro"><option value="">Todos los centros</option></select>
+          <div class="dos-col">
+            <label>Desde<input id="riDesde" type="date"></label>
+            <label>Hasta<input id="riHasta" type="date"></label>
+          </div>
+          <button id="btnInformeGestion" class="btn btn-primario btn-bloque" type="button">Generar informe PDF</button>
+        </div>
+      </div>
       <div class="card">
         <h2>Informes registrados</h2>
         <div class="filtros">
@@ -137,6 +150,22 @@
         </div>
         <p id="resumenHistorial" class="tenue"></p>
         <div id="listaHistorial"></div>
+      </div>
+    </section>
+
+    <!-- ============ MEDIDAS ============ -->
+    <section id="vista-medidas" class="vista" hidden>
+      <div class="card">
+        <h2>Seguimiento de medidas</h2>
+        <p class="tenue">Medidas de los informes aprobados. Asigne responsable y plazo, y ciérrelas con una foto cuando se cumplan.</p>
+        <div class="chips" id="chipsMedidas">
+          <button class="chip activa" data-estado="abiertas" type="button">Abiertas <b id="cntAbiertas">0</b></button>
+          <button class="chip chip-alerta" data-estado="vencidas" type="button">Vencidas <b id="cntVencidas">0</b></button>
+          <button class="chip" data-estado="cerradas" type="button">Cerradas <b id="cntCerradas">0</b></button>
+        </div>
+        <select id="mEmpresa" aria-label="Empresa"><option value="">Todas las empresas</option></select>
+        <p id="resumenMedidas" class="tenue"></p>
+        <div id="listaMedidas"></div>
       </div>
     </section>
 
@@ -209,6 +238,7 @@
           <label for="usrRol">Rol</label>
           <select id="usrRol">
             <option value="OBSERVADOR">Observador (registra observaciones)</option>
+            <option value="SSO">SSO (ve todo lo de sus empresas y genera informes)</option>
             <option value="ADMIN">Administrador (ve todo y gestiona usuarios)</option>
           </select>
           <span class="etiqueta">Empresas que puede ver</span>
@@ -268,6 +298,9 @@
     <button class="tab" data-vista="historial" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3Zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg>Historial<span id="badgePendientes" class="badge" hidden></span>
     </button>
+    <button class="tab" data-vista="medidas" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3h-4.18A3 3 0 0 0 12 1a3 3 0 0 0-2.82 2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm-2 14-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/></svg>Medidas<span id="badgeVencidas" class="badge" hidden></span>
+    </button>
     <button class="tab" data-vista="config" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1L11 21h4l.4-2.9a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Configuración
     </button>
@@ -311,6 +344,61 @@
         <button id="dlgCancelar" class="btn btn-borde" type="button">Cancelar</button>
         <button id="dlgEnviar" class="btn btn-primario" type="button">Enviar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Editar medida -->
+  <div id="dlgMedida" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="Editar medida">
+    <div class="card">
+      <h2>Responsable y plazo</h2>
+      <p id="dmTexto" class="tenue"></p>
+      <label for="dmResponsable">Responsable</label>
+      <input id="dmResponsable" maxlength="120" placeholder="Nombre y cargo">
+      <label for="dmCorreo">Correo del responsable (opcional, para recordatorios)</label>
+      <input id="dmCorreo" type="email" autocomplete="off" autocapitalize="none" maxlength="254">
+      <label for="dmLimite">Fecha límite</label>
+      <input id="dmLimite" type="date">
+      <label for="dmEstado">Estado</label>
+      <select id="dmEstado"><option>Pendiente</option><option>En proceso</option></select>
+      <div class="fila-botones">
+        <button id="dmCancelar" class="btn btn-borde" type="button">Cancelar</button>
+        <button id="dmGuardar" class="btn btn-primario" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cerrar medida -->
+  <div id="dlgCierre" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="Cerrar medida">
+    <div class="card">
+      <h2>Cerrar medida</h2>
+      <p id="dcTexto" class="tenue"></p>
+      <label for="dcComentario">¿Cómo se cumplió la medida?</label>
+      <textarea id="dcComentario" rows="3" maxlength="1000" placeholder="Ej.: Se instaló baranda de 1 m con rodapié."></textarea>
+      <label>Foto de cierre (recomendada)</label>
+      <input type="file" id="dcInputCamara" accept="image/*" capture="environment" hidden>
+      <input type="file" id="dcInputGaleria" accept="image/*" hidden>
+      <div class="fila-botones" style="margin-top:0">
+        <button id="dcCamara" class="btn btn-secundario" type="button">Tomar foto</button>
+        <button id="dcGaleria" class="btn btn-borde" type="button">Galería</button>
+      </div>
+      <div id="dcFotoCont" hidden>
+        <img id="dcFoto" class="foto-cierre" alt="Foto de cierre">
+        <button id="dcQuitar" class="btn btn-borde btn-bloque" type="button">Quitar foto</button>
+      </div>
+      <div class="fila-botones">
+        <button id="dcCancelar" class="btn btn-borde" type="button">Cancelar</button>
+        <button id="dcConfirmar" class="btn btn-primario" type="button">Cerrar medida</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ver foto de cierre -->
+  <div id="dlgVerFoto" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="Foto de cierre">
+    <div class="card">
+      <h2>Foto de cierre</h2>
+      <img id="vfFoto" class="foto-cierre" alt="Foto de cierre">
+      <p id="vfTexto" class="tenue"></p>
+      <button id="vfCerrar" class="btn btn-primario btn-bloque" type="button">Cerrar</button>
     </div>
   </div>
 

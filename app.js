@@ -11,6 +11,196 @@
   var editando = false;
   var ocupado = false;
 
+  /* ================= Medidas ================= */
+
+  var filtroMedidas = 'abiertas';
+  var medidaActual = null;
+  var fotoCierre = null;
+  var fotoCierreUrl = null;
+
+  function actualizarBadgeMedidas(s) {
+    var b = $('badgeVencidas');
+    var n = s && s.medidas ? s.medidas.vencidas : 0;
+    b.hidden = !n;
+    b.textContent = String(n || '');
+  }
+
+  function abrirMedidas() {
+    var sel = $('mEmpresa');
+    var valor = sel.value;
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: '', text: 'Todas las empresas' }));
+    empresasConocidas().forEach(function (e) { sel.appendChild(el('option', { value: e, text: e })); });
+    sel.value = valor;
+    if (!navigator.onLine) {
+      $('listaMedidas').textContent = '';
+      $('resumenMedidas').textContent = 'Sin conexión. Las medidas se consultan en línea.';
+      return;
+    }
+    conBloqueo('Cargando medidas…', cargarMedidas);
+  }
+
+  function cargarMedidas() {
+    return Api.llamar('medidas', { filtros: { estado: filtroMedidas, empresa: $('mEmpresa').value } }, { timeout: 30000 }).then(renderMedidas);
+  }
+
+  function fechaCorta(f) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f.slice(8, 10) + '-' + f.slice(5, 7) + '-' + f.slice(0, 4) : (f || '');
+  }
+
+  function textoPlazo(m) {
+    if (m.estado === 'Cerrada') return { t: 'Cerrada el ' + (m.fechaCierre || '').slice(0, 10).split('-').reverse().join('-'), c: '' };
+    if (m.diasRestantes === null) return { t: 'Sin plazo', c: '' };
+    if (m.diasRestantes < 0) return { t: 'Vencida hace ' + (-m.diasRestantes) + ' día(s) · plazo ' + fechaCorta(m.fechaLimite), c: 'vencida' };
+    if (m.diasRestantes === 0) return { t: 'Vence hoy', c: 'pronto' };
+    return { t: 'Plazo: ' + fechaCorta(m.fechaLimite) + ' (' + m.diasRestantes + ' día(s))', c: m.diasRestantes <= 2 ? 'pronto' : '' };
+  }
+
+  function renderMedidas(r) {
+    $('cntAbiertas').textContent = r.contadores.abiertas;
+    $('cntVencidas').textContent = r.contadores.vencidas;
+    $('cntCerradas').textContent = r.contadores.cerradas;
+    var s = sesion();
+    if (s && !$('mEmpresa').value) { s.medidas = r.contadores; U.guardarJSON(K_SESION, s); actualizarBadgeMedidas(s); }
+    var cont = $('listaMedidas');
+    cont.textContent = '';
+    $('resumenMedidas').textContent = r.total + ' medida(s)';
+    r.medidas.forEach(function (m) {
+      var plazo = textoPlazo(m);
+      var botones = [];
+      if (m.estado !== 'Cerrada') {
+        botones.push(el('button', { class: 'btn btn-borde', type: 'button', text: 'Responsable y plazo', onclick: function () { abrirEditarMedida(m); } }));
+        botones.push(el('button', { class: 'btn btn-primario', type: 'button', text: 'Cerrar medida', onclick: function () { abrirCierre(m); } }));
+      } else {
+        if (m.tieneFotoCierre) botones.push(el('button', { class: 'btn btn-secundario', type: 'button', text: 'Ver foto de cierre', onclick: function () { verFotoCierre(m); } }));
+        botones.push(el('button', { class: 'btn btn-borde', type: 'button', text: 'Reabrir', onclick: function () { reabrirMedida(m); } }));
+      }
+      cont.appendChild(el('div', { class: 'item medida' + (m.estado === 'Cerrada' ? ' cerrada' : '') }, [
+        el('div', { class: 'tit' }, [el('span', { text: m.medida }), el('span', { class: U.clasePrioridad(m.prioridad), text: U.textoPrioridad(m.prioridad) })]),
+        el('div', { class: 'sub', text: 'Peligro: ' + m.peligro }),
+        el('div', { class: 'sub', text: m.empresa + ' · ' + m.centro + ' · Obs. N.º ' + m.numero }),
+        el('p', {}, [el('span', { class: 'estado-medida ' + m.estado.replace(' ', '-'), text: m.estado }), document.createTextNode(' '),
+          el('span', { class: 'plazo ' + plazo.c, text: plazo.t })]),
+        el('div', { class: 'sub', text: 'Responsable: ' + (m.responsable || 'sin asignar') + (m.correoResponsable ? ' (' + m.correoResponsable + ')' : '') }),
+        m.comentarioCierre ? el('p', { text: 'Cierre: ' + m.comentarioCierre + (m.cerradaPor ? ' — ' + m.cerradaPor : '') }) : null,
+        el('div', { class: 'fila-botones' }, botones)
+      ]));
+    });
+    if (!r.medidas.length) {
+      cont.appendChild(el('p', { class: 'tenue', text: filtroMedidas === 'vencidas' ? 'No hay medidas vencidas.' :
+        filtroMedidas === 'cerradas' ? 'Aún no hay medidas cerradas.' : 'No hay medidas abiertas. Se crean al aprobar un informe.' }));
+    }
+  }
+
+  function abrirEditarMedida(m) {
+    medidaActual = m;
+    $('dmTexto').textContent = m.medida;
+    $('dmResponsable').value = m.responsable || '';
+    $('dmCorreo').value = m.correoResponsable || '';
+    $('dmLimite').value = m.fechaLimite || '';
+    $('dmEstado').value = m.estado === 'En proceso' ? 'En proceso' : 'Pendiente';
+    $('dlgMedida').hidden = false;
+  }
+
+  function alGuardarMedida() {
+    var m = medidaActual;
+    if (!m) return;
+    var datos = { id: m.id, responsable: $('dmResponsable').value.trim(), correoResponsable: $('dmCorreo').value.trim(),
+      fechaLimite: $('dmLimite').value, estado: $('dmEstado').value };
+    conBloqueo('Guardando…', function () {
+      return Api.llamar('medidaGuardar', datos).then(function () {
+        $('dlgMedida').hidden = true;
+        toast('Medida actualizada.');
+        return cargarMedidas();
+      });
+    });
+  }
+
+  function limpiarFotoCierre() {
+    fotoCierre = null;
+    if (fotoCierreUrl) { URL.revokeObjectURL(fotoCierreUrl); fotoCierreUrl = null; }
+    $('dcFotoCont').hidden = true;
+    $('dcFoto').removeAttribute('src');
+  }
+
+  function abrirCierre(m) {
+    medidaActual = m;
+    limpiarFotoCierre();
+    $('dcTexto').textContent = m.medida + ' — ' + m.empresa + ', ' + m.centro;
+    $('dcComentario').value = '';
+    $('dlgCierre').hidden = false;
+  }
+
+  function alElegirFotoCierre(ev) {
+    var archivo = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!archivo) return;
+    conBloqueo('Optimizando fotografía…', function () {
+      return Imagen.procesar(archivo).then(function (r) {
+        limpiarFotoCierre();
+        fotoCierre = r.blob;
+        fotoCierreUrl = URL.createObjectURL(r.blob);
+        $('dcFoto').src = fotoCierreUrl;
+        $('dcFotoCont').hidden = false;
+      });
+    });
+  }
+
+  function alConfirmarCierre() {
+    var m = medidaActual;
+    var comentario = $('dcComentario').value.trim();
+    if (comentario.length < 3) { toast('Describa brevemente cómo se cumplió la medida.', true); return; }
+    if (!fotoCierre && !confirm('¿Cerrar sin foto de cierre? Se recomienda adjuntar una foto como evidencia.')) return;
+    conBloqueo('Cerrando medida…', function () {
+      return (fotoCierre ? U.blobABase64(fotoCierre) : Promise.resolve('')).then(function (b64) {
+        return Api.llamar('medidaCerrar', { id: m.id, comentario: comentario, foto: b64 }, { timeout: 90000 });
+      }).then(function () {
+        $('dlgCierre').hidden = true;
+        limpiarFotoCierre();
+        toast('Medida cerrada.');
+        return cargarMedidas();
+      });
+    });
+  }
+
+  function verFotoCierre(m) {
+    conBloqueo('Cargando foto…', function () {
+      return Api.llamar('medidaFoto', { id: m.id }, { timeout: 60000 }).then(function (r) {
+        $('vfFoto').src = 'data:image/jpeg;base64,' + r.foto;
+        $('vfTexto').textContent = m.comentarioCierre || '';
+        $('dlgVerFoto').hidden = false;
+      });
+    });
+  }
+
+  function reabrirMedida(m) {
+    if (!confirm('¿Reabrir esta medida? Volverá a estado Pendiente.')) return;
+    conBloqueo('Reabriendo…', function () {
+      return Api.llamar('medidaReabrir', { id: m.id }).then(function () { toast('Medida reabierta.'); return cargarMedidas(); });
+    });
+  }
+
+  function bindMedidas() {
+    Array.prototype.forEach.call(document.querySelectorAll('#chipsMedidas .chip'), function (b) {
+      b.addEventListener('click', function () {
+        filtroMedidas = b.getAttribute('data-estado');
+        Array.prototype.forEach.call(document.querySelectorAll('#chipsMedidas .chip'), function (x) { x.classList.toggle('activa', x === b); });
+        conBloqueo('Cargando medidas…', cargarMedidas);
+      });
+    });
+    $('mEmpresa').addEventListener('change', function () { conBloqueo('Cargando medidas…', cargarMedidas); });
+    $('dmCancelar').addEventListener('click', function () { $('dlgMedida').hidden = true; });
+    $('dmGuardar').addEventListener('click', alGuardarMedida);
+    $('dcCamara').addEventListener('click', function () { $('dcInputCamara').click(); });
+    $('dcGaleria').addEventListener('click', function () { $('dcInputGaleria').click(); });
+    $('dcInputCamara').addEventListener('change', alElegirFotoCierre);
+    $('dcInputGaleria').addEventListener('change', alElegirFotoCierre);
+    $('dcQuitar').addEventListener('click', limpiarFotoCierre);
+    $('dcCancelar').addEventListener('click', function () { $('dlgCierre').hidden = true; limpiarFotoCierre(); });
+    $('dcConfirmar').addEventListener('click', alConfirmarCierre);
+    $('vfCerrar').addEventListener('click', function () { $('dlgVerFoto').hidden = true; $('vfFoto').removeAttribute('src'); });
+  }
+
   /* ================= Configuración ================= */
 
   function config() {
@@ -58,14 +248,15 @@
   function irA(vista) {
     var sinSesion = vista === 'login';
     document.body.classList.toggle('sin-sesion', sinSesion);
-    ['inicio', 'historial', 'config', 'login'].forEach(function (v) {
+    ['inicio', 'historial', 'medidas', 'config', 'login'].forEach(function (v) {
       $('vista-' + v).hidden = v !== vista;
     });
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
       b.classList.toggle('activa', b.getAttribute('data-vista') === vista);
     });
-    if (vista === 'historial') { renderPendientes(); llenarFiltroEmpresas(); }
+    if (vista === 'historial') { renderPendientes(); llenarFiltroEmpresas(); prepararInformeGestion(); }
     if (vista === 'config') cargarFormConfig();
+    if (vista === 'medidas') abrirMedidas();
     if (vista === 'login') prepararLogin();
     window.scrollTo(0, 0);
   }
@@ -521,7 +712,9 @@
         Informe.render(rec, $('informe'), fotoUrl);
         actualizarAviso();
         if (r.aviso) toast(r.aviso, true);
-        else toast(r.enviado ? 'Informe guardado y enviado por correo.' : 'Informe aprobado y guardado en Drive.');
+        else toast((r.enviado ? 'Informe guardado y enviado por correo.' : 'Informe aprobado y guardado en Drive.') +
+          (r.medidas ? ' Se crearon ' + r.medidas + ' medida(s) para seguimiento.' : ''));
+        if (r.medidas) cargarSesion(true);
       });
     });
   }
@@ -611,6 +804,53 @@
     s.value = valor;
   }
 
+  function nombreRol(r) {
+    return r === 'ADMIN' ? 'administrador' : r === 'SSO' ? 'perfil SSO' : 'observador';
+  }
+
+  function hoyISO(desplazamiento) {
+    var d = new Date(Date.now() + (desplazamiento || 0) * 86400000);
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+
+  function prepararInformeGestion() {
+    var s = sesion();
+    var rol = s && s.usuario ? s.usuario.rol : '';
+    var card = $('cardInformeGestion');
+    card.hidden = !(rol === 'ADMIN' || rol === 'SSO');
+    if (card.hidden) return;
+    var sel = $('riEmpresa');
+    var valor = sel.value;
+    sel.textContent = '';
+    empresasConocidas().forEach(function (e) { sel.appendChild(el('option', { value: e, text: e })); });
+    if (valor) sel.value = valor;
+    if (!$('riDesde').value) $('riDesde').value = hoyISO(-30);
+    if (!$('riHasta').value) $('riHasta').value = hoyISO(0);
+    llenarCentrosInforme();
+  }
+
+  function llenarCentrosInforme() {
+    var s = sesion();
+    var emp = $('riEmpresa').value;
+    var sel = $('riCentro');
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: '', text: 'Todos los centros' }));
+    var lista = (s && s.centros && s.centros[emp]) || [];
+    lista.slice().sort().forEach(function (c) { sel.appendChild(el('option', { value: c, text: c })); });
+  }
+
+  function alInformeGestion() {
+    var datos = { empresa: $('riEmpresa').value, centro: $('riCentro').value, desde: $('riDesde').value, hasta: $('riHasta').value };
+    if (!datos.empresa) { toast('No tiene empresas asignadas.', true); return; }
+    if (!datos.desde || !datos.hasta) { toast('Indique las fechas desde y hasta.', true); return; }
+    conBloqueo('Generando informe…', function () {
+      return Api.llamar('informePeriodo', datos, { timeout: 90000 }).then(function (r) {
+        entregarPdf(U.base64ABlob(r.pdf, 'application/pdf'), r.nombre);
+        toast('Informe generado: ' + r.resumen.observaciones + ' observación(es), ' + r.resumen.abiertas + ' medida(s) pendiente(s).');
+      });
+    });
+  }
+
   function buscar() {
     conBloqueo('Buscando…', consultarHistorial);
   }
@@ -671,7 +911,7 @@
     $('cfgUrl').value = c.apiUrl;
     var s0 = sesion();
     $('cfgCuenta').textContent = s0 && s0.usuario
-      ? 'Sesión iniciada como ' + s0.usuario.nombre + ' (usuario: ' + s0.usuario.usuario + ', ' + (s0.usuario.rol === 'ADMIN' ? 'administrador' : 'observador') + ').'
+      ? 'Sesión iniciada como ' + s0.usuario.nombre + ' (usuario: ' + s0.usuario.usuario + ', ' + nombreRol(s0.usuario.rol) + ').'
       : (c.usuario ? 'Sesión iniciada como ' + c.usuario + '.' : '');
     var esAdmin = !!(s0 && s0.usuario && s0.usuario.rol === 'ADMIN');
     $('cardUsuarios').hidden = !esAdmin;
@@ -688,11 +928,16 @@
     box.hidden = false;
     box.textContent = '';
     var lineas = [
-      'Conectado como ' + s.usuario.nombre + ' (' + (s.usuario.rol === 'ADMIN' ? 'administrador' : 'observador') + ').',
+      'Conectado como ' + s.usuario.nombre + ' (' + nombreRol(s.usuario.rol) + ').',
       'Empresas autorizadas: ' + (s.accesoTotal ? 'todas' : s.empresas.join(', ') || 'ninguna'),
       'IA: ' + (s.ia.autorizada ? 'autorizada' : 'NO autorizada por el administrador') + ' · ' + s.ia.proveedor + ' (' + s.ia.modelos.join(', ') + ')',
       'Análisis hoy: ' + s.ia.usoHoy + ' de ' + s.ia.limiteDiario + ' · Correos disponibles hoy: ' + (s.correosRestantes >= 0 ? s.correosRestantes : 's/i')
     ];
+    if (s.usuario.rol === 'ADMIN') {
+      lineas.push(s.avisosActivos
+        ? 'Avisos automáticos: activos (recordatorios diarios e informe semanal los lunes).'
+        : 'Avisos automáticos: NO activados. En Apps Script ejecute una vez la función activarAvisos.');
+    }
     lineas.forEach(function (t) { box.appendChild(el('p', { text: t })); });
   }
 
@@ -704,6 +949,7 @@
       if (actual && !actual.obs.observador) { actual.obs.observador = config().observador; renderMeta(); }
       llenarEmpresas();
       llenarCentros();
+      actualizarBadgeMedidas(s);
       return s;
     }, function (e) {
       if (!silencioso) throw e;
@@ -895,6 +1141,7 @@
     empresasAdmin.forEach(function (e) {
       cont.appendChild(el('div', { class: 'empresa-fila' + (e.activa ? '' : ' usuario-inactivo') }, [
         el('span', { class: 'empresa-nombre', text: e.empresa + (e.activa ? '' : ' (desactivada)') }),
+        el('span', { class: 'empresa-correos', text: 'Informe semanal a: ' + (e.correos ? 'usted y ' + e.correos : 'solo usted') }),
         el('div', { class: 'empresa-acciones' }, [
           el('button', {
             class: 'btn btn-borde', type: 'button', text: 'Modificar',
@@ -907,6 +1154,16 @@
           el('button', {
             class: 'btn btn-borde btn-eliminar', type: 'button', text: 'Eliminar',
             onclick: function () { eliminarEmpresa(e.empresa); }
+          })
+        ]),
+        el('div', { class: 'empresa-acciones' }, [
+          el('button', {
+            class: 'btn btn-borde', type: 'button', text: 'Correos del informe',
+            onclick: function () { correosEmpresa(e); }
+          }),
+          el('button', {
+            class: 'btn btn-borde', type: 'button', text: 'Ver informe semanal',
+            onclick: function () { verSemanal(e.empresa); }
           })
         ])
       ]));
@@ -951,6 +1208,25 @@
       return Api.llamar('empresaEliminar', { empresa: nombre }, { timeout: 60000 }).then(function (r) {
         toast('Empresa «' + r.empresa + '» eliminada.');
         return refrescarTrasEmpresa();
+      });
+    });
+  }
+
+  function correosEmpresa(e) {
+    var v = prompt('Correos que recibirán el informe semanal de «' + e.empresa + '» (además de usted). Sepárelos con coma. Déjelo vacío para enviarlo solo a usted.', e.correos || '');
+    if (v === null) return;
+    conBloqueo('Guardando…', function () {
+      return Api.llamar('empresaCorreos', { empresa: e.empresa, correos: v }).then(function (r) {
+        toast(r.correos.length ? 'El informe semanal se enviará también a: ' + r.correos.join(', ') : 'El informe semanal se enviará solo a usted.');
+        return cargarEmpresasAdmin();
+      });
+    });
+  }
+
+  function verSemanal(nombre) {
+    conBloqueo('Generando informe semanal…', function () {
+      return Api.llamar('semanalPdf', { empresa: nombre, ultimos7: true }, { timeout: 90000 }).then(function (r) {
+        entregarPdf(U.base64ABlob(r.pdf, 'application/pdf'), r.nombre);
       });
     });
   }
@@ -1003,7 +1279,7 @@
     usuariosCache.forEach(function (u) {
       var estado = !u.activo ? 'Inactivo' : (u.tieneContrasena ? 'Activo' : (u.tieneClave ? 'Activo · sin contraseña (usa clave PGI-)' : 'Activo · sin contraseña'));
       cont.appendChild(el('div', { class: 'item' + (u.activo ? '' : ' usuario-inactivo') }, [
-        el('div', { class: 'tit' }, [el('span', { text: u.nombre || u.usuario }), el('span', { class: 'tenue', text: u.rol === 'ADMIN' ? 'Administrador' : 'Observador' })]),
+        el('div', { class: 'tit' }, [el('span', { text: u.nombre || u.usuario }), el('span', { class: 'tenue', text: u.rol === 'ADMIN' ? 'Administrador' : u.rol === 'SSO' ? 'SSO' : 'Observador' })]),
         el('div', { class: 'sub', text: 'Usuario: ' + u.usuario }),
         el('div', { class: 'sub', text: 'Empresas: ' + (u.empresas === '*' || u.rol === 'ADMIN' ? 'todas' : (u.empresas || '—')) }),
         el('div', { class: 'sub', text: estado }),
@@ -1109,6 +1385,9 @@
     $('usrRol').addEventListener('change', actualizarTodas);
     $('usrTodas').addEventListener('change', actualizarTodas);
     $('btnAgregarEmpresa').addEventListener('click', alAgregarEmpresa);
+    bindMedidas();
+    $('riEmpresa').addEventListener('change', llenarCentrosInforme);
+    $('btnInformeGestion').addEventListener('click', alInformeGestion);
     $('nuevaEmpresa').addEventListener('keydown', function (e) { if (e.key === 'Enter') alAgregarEmpresa(); });
     $('btnBorrarLocal').addEventListener('click', alBorrarLocal);
     window.addEventListener('online', function () { actualizarRed(); cargarSesion(true); });
@@ -1118,7 +1397,7 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.3.0') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.5.0') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();
