@@ -988,16 +988,18 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.1.1') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.1.2') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();
     actualizarRed();
     var c = config();
+    // La vista Inicio y las pestañas parten ocultas en el HTML para que no "parpadeen" antes del inicio de sesión.
     if (!c.token) {
       mostrarLogin();
-    } else if (navigator.onLine) {
-      cargarSesion(true);
+    } else {
+      irA('inicio');
+      if (navigator.onLine) cargarSesion(true);
     }
     var seguro = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if ('serviceWorker' in navigator && seguro) navigator.serviceWorker.register('sw.js').catch(function () {});
