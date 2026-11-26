@@ -3,11 +3,11 @@
  * Nunca almacena respuestas del servidor (datos de observaciones).
  * Al publicar una nueva versión, cambie CACHE para forzar la actualización.
  */
-var CACHE = 'previgest-ia-v1.0.0';
+var CACHE = 'previgest-ia-v1.0.1';
 var ARCHIVOS = [
   './', 'index.html', 'styles.css', 'config.js', 'manifest.webmanifest',
-  'js/util.js', 'js/db.js', 'js/imagen.js', 'js/api.js', 'js/informe.js', 'js/app.js',
-  'assets/logo.svg', 'assets/icon.svg', 'assets/icon-180.png', 'assets/icon-192.png', 'assets/icon-512.png'
+  'util.js', 'db.js', 'imagen.js', 'api.js', 'informe.js', 'app.js',
+  'logo.svg', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'
 ];
 
 self.addEventListener('install', function (e) {
