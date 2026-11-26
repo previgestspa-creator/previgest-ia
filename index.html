@@ -55,8 +55,8 @@
         <div class="card">
           <h2><span class="num">2</span> Datos de la observación</h2>
           <label for="empresa">Empresa</label>
-          <input id="empresa" list="listaEmpresas" autocomplete="off" maxlength="120" placeholder="Nombre de la empresa">
-          <datalist id="listaEmpresas"></datalist>
+          <select id="empresa"><option value="">Seleccione la empresa</option></select>
+          <p id="empresaAyuda" class="tenue" hidden></p>
 
           <label for="centro">Centro de trabajo, instalación o embarcación</label>
           <input id="centro" list="listaCentros" autocomplete="off" maxlength="120" placeholder="Ej.: Centro de cultivo, pontón, taller">
@@ -211,8 +211,12 @@
             <option value="OBSERVADOR">Observador (registra observaciones)</option>
             <option value="ADMIN">Administrador (ve todo y gestiona usuarios)</option>
           </select>
-          <label for="usrEmpresas">Empresas que puede ver</label>
-          <input id="usrEmpresas" maxlength="1000" placeholder="* para todas, o: Empresa A; Empresa B">
+          <span class="etiqueta">Empresas que puede ver</span>
+          <label class="check">
+            <input type="checkbox" id="usrTodas">
+            <span>Todas las empresas</span>
+          </label>
+          <div id="usrListaEmpresas" class="lista-checks"></div>
           <label class="check">
             <input type="checkbox" id="usrActivo" checked>
             <span>Cuenta activa</span>
@@ -229,6 +233,17 @@
           </div>
         </div>
         <div id="listaUsuarios"></div>
+      </div>
+
+      <!-- Solo administradores -->
+      <div id="cardEmpresas" class="card" hidden>
+        <h2>Empresas</h2>
+        <p class="tenue">Solo se pueden registrar observaciones de las empresas de esta lista.</p>
+        <div class="fila-input">
+          <input id="nuevaEmpresa" maxlength="120" placeholder="Nombre de la empresa nueva" aria-label="Nombre de la empresa nueva">
+          <button id="btnAgregarEmpresa" class="btn btn-secundario" type="button">Agregar</button>
+        </div>
+        <div id="listaEmpresasAdmin"></div>
       </div>
 
       <details class="card">

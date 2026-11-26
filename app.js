@@ -147,7 +147,7 @@
   function cargarFormulario(rec) {
     actual = rec;
     editando = false;
-    $('empresa').value = rec.obs.empresa || '';
+    llenarEmpresas(rec.obs.empresa || '');
     $('centro').value = rec.obs.centro || '';
     $('actividad').value = rec.obs.actividad || '';
     $('actividadDetalle').value = rec.obs.actividadDetalle || '';
@@ -206,17 +206,32 @@
     l[empresa] = l[empresa].slice(0, 50);
     U.guardarJSON(K_LUGARES, l);
   }
+  /** Empresas registradas por el administrador (y autorizadas para este usuario). */
   function empresasConocidas() {
     var s = sesion();
-    var locales = Object.keys(U.leerJSON(K_LUGARES, {}));
-    if (s && !s.accesoTotal) return s.empresas.slice();
-    var todas = (s ? s.empresas : []).concat(locales);
-    return todas.filter(function (e, i) { return todas.indexOf(e) === i; }).sort();
+    return s && s.empresas ? s.empresas.slice().sort(function (a, b) { return a.localeCompare(b, 'es'); }) : [];
   }
-  function llenarEmpresas() {
-    var dl = $('listaEmpresas');
-    dl.textContent = '';
-    empresasConocidas().forEach(function (e) { dl.appendChild(el('option', { value: e })); });
+  function llenarEmpresas(forzar) {
+    var sel = $('empresa');
+    var valor = forzar !== undefined ? forzar : sel.value;
+    var lista = empresasConocidas();
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: '', text: lista.length ? 'Seleccione la empresa' : 'Sin empresas disponibles' }));
+    lista.forEach(function (e) { sel.appendChild(el('option', { value: e, text: e })); });
+    if (valor && lista.indexOf(valor) < 0) {
+      // Observación guardada antes con una empresa que ya no está en la lista: se muestra para no perderla.
+      sel.appendChild(el('option', { value: valor, text: valor + ' (no disponible)' }));
+    }
+    sel.value = valor || '';
+    var s = sesion();
+    var ayuda = $('empresaAyuda');
+    if (!lista.length) {
+      ayuda.hidden = false;
+      ayuda.textContent = !s ? 'Conéctese a Internet una vez para cargar la lista de empresas.'
+        : (s.usuario && s.usuario.rol === 'ADMIN' ? 'Agregue empresas en Configuración → Empresas.' : 'No tiene empresas asignadas. Contacte al administrador.');
+    } else {
+      ayuda.hidden = true;
+    }
   }
   function llenarCentros() {
     var emp = $('empresa').value.trim().toLowerCase();
@@ -368,14 +383,11 @@
     leerFormulario();
     var o = actual.obs;
     if (!actual.foto) return 'Agregue una fotografía.';
-    if (!o.empresa) return 'Indique la empresa.';
+    if (!o.empresa) return 'Seleccione la empresa.';
+    if (sesion() && empresasConocidas().indexOf(o.empresa) < 0) return 'La empresa «' + o.empresa + '» no está disponible. Elija una empresa de la lista.';
     if (!o.centro) return 'Indique el centro de trabajo, instalación o embarcación.';
     if (!o.actividad) return 'Seleccione el tipo de actividad.';
     if (!o.observador) return 'Configure su nombre de observador en Configuración.';
-    var s = sesion();
-    if (s && !s.accesoTotal && s.empresas.map(function (e) { return e.toLowerCase(); }).indexOf(o.empresa.toLowerCase()) < 0) {
-      return 'No tiene permiso para registrar observaciones de esta empresa.';
-    }
     if (!actual.confirmaPrivacidad) return 'Confirme que la fotografía no contiene datos personales o confidenciales sin ocultar.';
     return '';
   }
@@ -661,8 +673,10 @@
     $('cfgCuenta').textContent = s0 && s0.usuario
       ? 'Sesión iniciada como ' + s0.usuario.nombre + ' (usuario: ' + s0.usuario.usuario + ', ' + (s0.usuario.rol === 'ADMIN' ? 'administrador' : 'observador') + ').'
       : (c.usuario ? 'Sesión iniciada como ' + c.usuario + '.' : '');
-    $('cardUsuarios').hidden = !(s0 && s0.usuario && s0.usuario.rol === 'ADMIN');
-    if (!$('cardUsuarios').hidden && navigator.onLine) cargarUsuarios();
+    var esAdmin = !!(s0 && s0.usuario && s0.usuario.rol === 'ADMIN');
+    $('cardUsuarios').hidden = !esAdmin;
+    $('cardEmpresas').hidden = !esAdmin;
+    if (esAdmin && navigator.onLine) { cargarEmpresasAdmin(); cargarUsuarios(); }
     $('cfgCorreo').value = c.destinatario;
     $('cfgAutoEnvio').checked = c.autoEnvio;
     var s = sesion();
@@ -862,6 +876,77 @@
     return s.slice(0, 5) + '-' + s.slice(5) + (2 + (b[0] % 8));
   }
 
+  var empresasAdmin = [];
+
+  function cargarEmpresasAdmin() {
+    return Api.llamar('empresas', {}, { timeout: 30000 }).then(function (r) {
+      empresasAdmin = r.empresas || [];
+      renderEmpresasAdmin();
+      if (!$('formUsuario').hidden) renderChecksEmpresas(empresasMarcadas());
+    }, function (e) {
+      $('listaEmpresasAdmin').textContent = '';
+      $('listaEmpresasAdmin').appendChild(el('p', { class: 'tenue', text: 'No se pudo cargar la lista de empresas: ' + e.message }));
+    });
+  }
+
+  function renderEmpresasAdmin() {
+    var cont = $('listaEmpresasAdmin');
+    cont.textContent = '';
+    empresasAdmin.forEach(function (e) {
+      cont.appendChild(el('div', { class: 'empresa-fila' + (e.activa ? '' : ' usuario-inactivo') }, [
+        el('span', { text: e.empresa + (e.activa ? '' : ' (desactivada)') }),
+        el('button', {
+          class: 'btn btn-borde', type: 'button', text: e.activa ? 'Desactivar' : 'Activar',
+          onclick: function () { guardarEmpresa(e.empresa, !e.activa); }
+        })
+      ]));
+    });
+    if (!empresasAdmin.length) cont.appendChild(el('p', { class: 'tenue', text: 'Aún no hay empresas. Agregue la primera.' }));
+  }
+
+  function guardarEmpresa(nombre, activa) {
+    if (!activa && !confirm('¿Desactivar «' + nombre + '»? No se podrán registrar nuevas observaciones de esta empresa. Su historial se conserva.')) return;
+    conBloqueo(activa ? 'Guardando empresa…' : 'Desactivando…', function () {
+      return Api.llamar('empresaGuardar', { empresa: nombre, activa: activa }).then(function (r) {
+        $('nuevaEmpresa').value = '';
+        toast(r.nueva ? 'Empresa «' + r.empresa + '» agregada.' : (activa ? 'Empresa activada.' : 'Empresa desactivada.'));
+        return Promise.all([cargarEmpresasAdmin(), cargarSesion(true)]);
+      });
+    });
+  }
+
+  function alAgregarEmpresa() {
+    var nombre = $('nuevaEmpresa').value.replace(/\s+/g, ' ').trim();
+    if (nombre.length < 2) { toast('Escriba el nombre de la empresa.', true); return; }
+    var existe = empresasAdmin.filter(function (e) { return e.empresa.toLowerCase() === nombre.toLowerCase(); })[0];
+    if (existe && existe.activa) { toast('Esa empresa ya está en la lista.', true); return; }
+    guardarEmpresa(existe ? existe.empresa : nombre, true);
+  }
+
+  function empresasMarcadas() {
+    return Array.prototype.map.call(document.querySelectorAll('#usrListaEmpresas input:checked'), function (c) { return c.value; });
+  }
+
+  function renderChecksEmpresas(marcadas) {
+    var cont = $('usrListaEmpresas');
+    cont.textContent = '';
+    var lower = marcadas.map(function (m) { return m.toLowerCase(); });
+    empresasAdmin.filter(function (e) { return e.activa || lower.indexOf(e.empresa.toLowerCase()) >= 0; }).forEach(function (e) {
+      var chk = el('input', { type: 'checkbox', value: e.empresa });
+      chk.checked = lower.indexOf(e.empresa.toLowerCase()) >= 0;
+      cont.appendChild(el('label', { class: 'check' }, [chk, el('span', { text: e.empresa })]));
+    });
+    if (!empresasAdmin.length) cont.appendChild(el('p', { class: 'tenue', text: 'Primero agregue empresas en la sección Empresas.' }));
+    actualizarTodas();
+  }
+
+  function actualizarTodas() {
+    var todas = $('usrTodas').checked || $('usrRol').value === 'ADMIN';
+    if ($('usrRol').value === 'ADMIN') $('usrTodas').checked = true;
+    $('usrTodas').disabled = $('usrRol').value === 'ADMIN';
+    $('usrListaEmpresas').hidden = todas;
+  }
+
   function cargarUsuarios() {
     return Api.llamar('usuarios', {}, { timeout: 30000 }).then(function (r) {
       usuariosCache = r.usuarios || [];
@@ -898,7 +983,9 @@
     $('usrUsuario').disabled = !!u;
     $('usrNombre').value = u ? u.nombre : '';
     $('usrRol').value = u ? u.rol : 'OBSERVADOR';
-    $('usrEmpresas').value = u ? u.empresas : '';
+    var lista = u && u.empresas && u.empresas !== '*' ? u.empresas.split(';').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+    $('usrTodas').checked = !!(u && (u.empresas === '*' || u.rol === 'ADMIN'));
+    renderChecksEmpresas(lista);
     $('usrActivo').checked = u ? u.activo : true;
     $('usrContrasena').value = u ? '' : generarContrasena();
     $('usrContrasenaEtiqueta').textContent = u ? 'Nueva contraseña (deje vacío para no cambiarla)' : 'Contraseña';
@@ -911,11 +998,11 @@
       usuario: $('usrUsuario').value.trim().toLowerCase(),
       nombre: $('usrNombre').value.trim(),
       rol: $('usrRol').value,
-      empresas: $('usrEmpresas').value.trim(),
+      empresas: ($('usrTodas').checked || $('usrRol').value === 'ADMIN') ? '*' : empresasMarcadas().join('; '),
       activo: $('usrActivo').checked,
       contrasena: $('usrContrasena').value
     };
-    if (d.rol === 'ADMIN' && !d.empresas) d.empresas = '*';
+    if (!d.empresas) { toast('Marque al menos una empresa o «Todas las empresas».', true); return; }
     if (!/^[a-z0-9._@\-]{3,60}$/.test(d.usuario) && !editandoUsuario) {
       toast('El usuario debe tener entre 3 y 60 caracteres: letras sin tilde, números, punto, guion o @. Sin espacios.', true); return;
     }
@@ -949,7 +1036,7 @@
     $('btnReemplazar').addEventListener('click', function () { $('fotoVacia').hidden = !$('fotoVacia').hidden; });
     $('btnQuitarFoto').addEventListener('click', quitarFoto);
     $('btnAnonimizar').addEventListener('click', abrirEditor);
-    $('empresa').addEventListener('input', function () { llenarCentros(); autoguardar(); });
+    $('empresa').addEventListener('change', function () { llenarCentros(); autoguardar(); });
     ['centro', 'contexto', 'actividadDetalle'].forEach(function (id) { $(id).addEventListener('input', autoguardar); });
     $('actividad').addEventListener('change', function () {
       $('campoOtra').hidden = $('actividad').value !== 'Otra actividad';
@@ -979,7 +1066,10 @@
     $('btnGenerarContrasena').addEventListener('click', function () { $('usrContrasena').value = generarContrasena(); });
     $('usrCancelar').addEventListener('click', function () { $('formUsuario').hidden = true; });
     $('usrGuardar').addEventListener('click', alGuardarUsuario);
-    $('usrRol').addEventListener('change', function () { if ($('usrRol').value === 'ADMIN' && !$('usrEmpresas').value) $('usrEmpresas').value = '*'; });
+    $('usrRol').addEventListener('change', actualizarTodas);
+    $('usrTodas').addEventListener('change', actualizarTodas);
+    $('btnAgregarEmpresa').addEventListener('click', alAgregarEmpresa);
+    $('nuevaEmpresa').addEventListener('keydown', function (e) { if (e.key === 'Enter') alAgregarEmpresa(); });
     $('btnBorrarLocal').addEventListener('click', alBorrarLocal);
     window.addEventListener('online', function () { actualizarRed(); cargarSesion(true); });
     window.addEventListener('offline', actualizarRed);
@@ -988,7 +1078,7 @@
   }
 
   function iniciar() {
-    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.1.2') + ' · Uso interno';
+    $('versionApp').textContent = 'Previgest IA v' + ((window.PREVIGEST_CONFIG && PREVIGEST_CONFIG.VERSION) || '1.2.0') + ' · Uso interno';
     bind();
     cargarFormulario(nuevaObservacion());
     llenarEmpresas();
