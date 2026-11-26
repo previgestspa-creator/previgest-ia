@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#0b2a4a">
+  <meta name="description" content="Previgest IA — Observaciones Preventivas. Uso interno.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Previgest IA">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Previgest IA</title>
+</head>
+<body>
+  <header class="topbar">
+    <img src="assets/logo.svg" alt="Previgest" class="logo" id="logo">
+    <div class="app-title">Observaciones<br>Preventivas</div>
+    <span id="estadoRed" class="red" role="status"></span>
+  </header>
+
+  <div id="aviso" class="aviso" hidden>
+    <span id="avisoTexto"></span>
+    <button id="avisoAccion" class="btn btn-small" hidden></button>
+  </div>
+
+  <main id="main">
+    <!-- ============ INICIO ============ -->
+    <section id="vista-inicio" class="vista">
+      <div id="paso-captura">
+        <div class="card">
+          <h2><span class="num">1</span> Fotografía</h2>
+          <div id="fotoVacia" class="botones-foto">
+            <button id="btnCamara" class="btn btn-primario btn-xl" type="button">Tomar fotografía</button>
+            <button id="btnGaleria" class="btn btn-secundario btn-xl" type="button">Elegir de la galería</button>
+          </div>
+          <input type="file" id="inputCamara" accept="image/*" capture="environment" hidden>
+          <input type="file" id="inputGaleria" accept="image/*" hidden>
+          <div id="fotoVista" hidden>
+            <img id="imgVista" class="foto-vista" alt="Fotografía seleccionada">
+            <p id="fotoInfo" class="tenue"></p>
+            <div class="fila-botones">
+              <button id="btnAnonimizar" class="btn btn-secundario" type="button">Ocultar rostros y datos</button>
+              <button id="btnReemplazar" class="btn btn-borde" type="button">Reemplazar</button>
+              <button id="btnQuitarFoto" class="btn btn-borde btn-peligro" type="button">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">2</span> Datos de la observación</h2>
+          <label for="empresa">Empresa</label>
+          <input id="empresa" list="listaEmpresas" autocomplete="off" maxlength="120" placeholder="Nombre de la empresa">
+          <datalist id="listaEmpresas"></datalist>
+
+          <label for="centro">Centro de trabajo, instalación o embarcación</label>
+          <input id="centro" list="listaCentros" autocomplete="off" maxlength="120" placeholder="Ej.: Centro de cultivo, pontón, taller">
+          <datalist id="listaCentros"></datalist>
+
+          <label for="actividad">Tipo de actividad</label>
+          <select id="actividad">
+            <option value="">Seleccione…</option>
+            <option>Trabajo operativo</option>
+            <option>Tránsito peatonal</option>
+            <option>Descanso</option>
+            <option>Mantención</option>
+            <option>Traslado de personal</option>
+            <option>Manipulación de cargas</option>
+            <option>Operaciones marítimas</option>
+            <option>Inspección</option>
+            <option>Otra actividad</option>
+          </select>
+          <div id="campoOtra" hidden>
+            <label for="actividadDetalle">¿Cuál actividad?</label>
+            <input id="actividadDetalle" maxlength="120">
+          </div>
+
+          <label for="contexto">Contexto breve <span class="tenue">(opcional)</span></label>
+          <div class="con-microfono">
+            <textarea id="contexto" rows="3" maxlength="1500" placeholder="Qué se está haciendo, condiciones del lugar, clima… No escriba nombres de personas."></textarea>
+            <button id="btnDictar" class="btn btn-icono" type="button" aria-label="Dictar por voz" title="Dictar por voz" hidden>
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+            </button>
+          </div>
+          <p class="meta-linea"><span id="metaFecha"></span> · <span id="metaObservador"></span></p>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="chkPrivacidad">
+          <span>Confirmo que la fotografía no muestra rostros identificables, credenciales, patentes ni información confidencial, o que fueron ocultados.</span>
+        </label>
+
+        <button id="btnAnalizar" class="btn btn-primario btn-xl btn-bloque" type="button">Analizar con IA</button>
+        <p id="ayudaAnalizar" class="tenue centro"></p>
+      </div>
+
+      <div id="paso-informe" hidden>
+        <div id="informe" class="card informe"></div>
+        <div class="acciones">
+          <button id="btnEditar" class="btn btn-secundario" type="button">Editar informe</button>
+          <button id="btnPdf" class="btn btn-secundario" type="button">Descargar PDF</button>
+          <button id="btnCorreo" class="btn btn-secundario" type="button">Enviar por correo</button>
+          <button id="btnGuardar" class="btn btn-primario" type="button">Guardar informe</button>
+        </div>
+        <button id="btnNueva" class="btn btn-borde btn-bloque" type="button">Nueva observación</button>
+      </div>
+    </section>
+
+    <!-- ============ HISTORIAL ============ -->
+    <section id="vista-historial" class="vista" hidden>
+      <div class="card">
+        <h2>Pendientes en este dispositivo</h2>
+        <p class="tenue">Observaciones aún no guardadas en el servidor.</p>
+        <div id="listaPendientes"></div>
+        <button id="btnProcesarPendientes" class="btn btn-secundario btn-bloque" type="button" hidden>Analizar pendientes ahora</button>
+      </div>
+      <div class="card">
+        <h2>Informes registrados</h2>
+        <div class="filtros">
+          <select id="fEmpresa" aria-label="Empresa"><option value="">Todas las empresas</option></select>
+          <input id="fCentro" placeholder="Centro de trabajo" aria-label="Centro de trabajo">
+          <div class="dos-col">
+            <label>Desde<input id="fDesde" type="date"></label>
+            <label>Hasta<input id="fHasta" type="date"></label>
+          </div>
+          <select id="fPrioridad" aria-label="Prioridad">
+            <option value="">Todas las prioridades</option>
+            <option>Crítica</option><option>Alta</option><option>Media</option><option>Baja</option>
+            <option>No evaluable con la información disponible</option>
+          </select>
+          <button id="btnBuscar" class="btn btn-primario btn-bloque" type="button">Buscar</button>
+        </div>
+        <p id="resumenHistorial" class="tenue"></p>
+        <div id="listaHistorial"></div>
+      </div>
+    </section>
+
+    <!-- ============ CONFIGURACIÓN ============ -->
+    <section id="vista-config" class="vista" hidden>
+      <div class="card">
+        <h2>Usuario</h2>
+        <label for="cfgObservador">Nombre del observador</label>
+        <input id="cfgObservador" maxlength="80" autocomplete="name">
+        <label for="cfgClave">Clave de acceso personal</label>
+        <input id="cfgClave" type="password" autocomplete="off" spellcheck="false" placeholder="PGI-…">
+        <label for="cfgUrl">Dirección del servidor</label>
+        <input id="cfgUrl" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+      </div>
+      <div class="card">
+        <h2>Informes</h2>
+        <label for="cfgCorreo">Correo destinatario predeterminado</label>
+        <input id="cfgCorreo" type="email" autocomplete="email" placeholder="prevencion@empresa.cl">
+        <label class="check">
+          <input type="checkbox" id="cfgAutoEnvio">
+          <span>Enviar automáticamente por correo al guardar (aprobar) el informe</span>
+        </label>
+      </div>
+      <button id="btnGuardarConfig" class="btn btn-primario btn-bloque" type="button">Guardar y verificar conexión</button>
+      <div id="estadoServidor" class="card tenue" hidden></div>
+      <div class="card">
+        <h2>Privacidad</h2>
+        <p class="tenue">Las fotografías se comprimen y se les eliminan los metadatos (ubicación, dispositivo) antes de salir del teléfono. No se envían a la IA el nombre de la empresa, del centro ni del observador.</p>
+        <button id="btnBorrarLocal" class="btn btn-borde btn-peligro btn-bloque" type="button">Borrar datos de este dispositivo</button>
+      </div>
+      <p class="tenue centro" id="versionApp"></p>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Navegación principal">
+    <button class="tab activa" data-vista="inicio" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg>Inicio
+    </button>
+    <button class="tab" data-vista="historial" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3Zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg>Historial<span id="badgePendientes" class="badge" hidden></span>
+    </button>
+    <button class="tab" data-vista="config" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1L11 21h4l.4-2.9a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Configuración
+    </button>
+  </nav>
+
+  <!-- Editor de anonimización -->
+  <div id="editor" class="modal" hidden role="dialog" aria-modal="true" aria-label="Ocultar datos personales">
+    <div class="modal-cab">
+      <strong>Ocultar rostros y datos</strong>
+      <span class="tenue">Arrastre sobre cada zona a ocultar</span>
+    </div>
+    <div class="lienzo-cont"><canvas id="lienzo"></canvas></div>
+    <div class="fila-botones modal-pie">
+      <button id="edDeshacer" class="btn btn-borde" type="button">Deshacer</button>
+      <button id="edCancelar" class="btn btn-borde" type="button">Cancelar</button>
+      <button id="edAplicar" class="btn btn-primario" type="button">Aplicar</button>
+    </div>
+  </div>
+
+  <!-- Diálogo de correo -->
+  <div id="dlgCorreo" class="modal modal-centro" hidden role="dialog" aria-modal="true" aria-label="Enviar por correo">
+    <div class="card">
+      <h2>Enviar por correo</h2>
+      <p class="tenue">Se aprobará y guardará el informe, y se enviará con el PDF adjunto.</p>
+      <label for="dlgDestino">Destinatario</label>
+      <input id="dlgDestino" type="email" autocomplete="email">
+      <div class="fila-botones">
+        <button id="dlgCancelar" class="btn btn-borde" type="button">Cancelar</button>
+        <button id="dlgEnviar" class="btn btn-primario" type="button">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cargando" class="cargando" hidden><div class="spinner"></div><p id="cargandoTexto">Procesando…</p></div>
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/imagen.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/informe.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
